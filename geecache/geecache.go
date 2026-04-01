@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"sync"
+
+	"github.com/Jingqi0327/GeeCache/geecache/singleflight"
 )
 
 type Getter interface {
@@ -21,6 +23,7 @@ type Group struct {
 	getter    Getter // 缓存数据未命中时回调函数
 	mainCache cache  // 支持并发的Cache
 	peers     PeerPicker
+	loader    *singleflight.Group
 }
 
 // 存放所有Group的全局变量
@@ -40,6 +43,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheBytes: cacheBytes},
+		loader:    &singleflight.Group{},
 	}
 	groups[name] = g
 	return g
@@ -73,15 +77,23 @@ func (g *Group) RegisterPeers(peers PeerPicker) {
 }
 
 func (g *Group) load(key string) (value ByteView, err error) {
-	if g.peers != nil {
-		if peer, ok := g.peers.PickPeer(key); ok {
-			if value, err := g.getFromPeer(peer, key); err == nil {
-				return value, nil
+	fn := func() (interface{}, error) {
+		if g.peers != nil {
+			if peer, ok := g.peers.PickPeer(key); ok {
+				if value, err := g.getFromPeer(peer, key); err == nil {
+					return value, nil
+				}
+				log.Println("[GeeCache] Failed to get from peer", err)
 			}
-			log.Println("[GeeCache] Failed to get from peer", err)
 		}
+		return g.getLocally(key)
 	}
-	return g.getLocally(key)
+
+	viewi, err := g.loader.Do(key, fn)
+	if err == nil {
+		return viewi.(ByteView), nil
+	}
+	return
 }
 
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
