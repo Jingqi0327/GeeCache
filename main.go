@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Jingqi0327/GeeCache/geecache"
 )
@@ -15,6 +16,9 @@ var db = map[string]string{
 	"Sam":  "567",
 }
 
+var defaultTTL = 10 * time.Second
+var gcInterval = 30 * time.Second
+
 func createGroup() *geecache.Group {
 	return geecache.NewGroup("scores", 2<<10, geecache.GetterFunc(
 		func(key string) ([]byte, error) {
@@ -23,7 +27,7 @@ func createGroup() *geecache.Group {
 				return []byte(v), nil
 			}
 			return nil, fmt.Errorf("%s not exist", key)
-		}))
+		}), defaultTTL, gcInterval)
 }
 
 func startCacheServer(addr string, addrs []string, gee *geecache.Group) {

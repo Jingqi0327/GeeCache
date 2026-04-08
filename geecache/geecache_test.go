@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +30,7 @@ func TestGet(t *testing.T) {
 				return []byte(v), nil
 			}
 			return nil, fmt.Errorf("%s not exist", key)
-		}))
+		}), 1*time.Minute, 1*time.Minute)
 	// 遍历db中的数据
 	for k, v := range db {
 		// 第一次访问，应该从数据库中获取数据

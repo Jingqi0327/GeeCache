@@ -2,6 +2,7 @@ package geecache
 
 import (
 	"sync"
+	"time"
 
 	"github.com/Jingqi0327/GeeCache/lru"
 )
@@ -12,13 +13,13 @@ type cache struct {
 	cacheBytes int64 // 允许使用的最大内存
 }
 
-func (c *cache) add(key string, value ByteView) {
+func (c *cache) add(key string, value ByteView, duration time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.lru == nil {
 		c.lru = lru.New(c.cacheBytes, nil)
 	}
-	c.lru.Add(key, value)
+	c.lru.Add(key, value, duration)
 }
 
 func (c *cache) get(key string) (value ByteView, ok bool) {
@@ -28,9 +29,23 @@ func (c *cache) get(key string) (value ByteView, ok bool) {
 	if c.lru == nil {
 		return
 	}
-	
+
 	if v, ok := c.lru.Get(key); ok {
 		return v.(ByteView), ok
 	}
 	return
+}
+
+func (c *cache) startGC(gcInterval time.Duration) {
+	ticker := time.NewTicker(gcInterval)
+	go func() {
+		for {
+			<-ticker.C
+			c.mu.Lock()
+			if c.lru != nil {
+				c.lru.RemoveExpired()
+			}
+			c.mu.Unlock()
+		}
+	}()
 }

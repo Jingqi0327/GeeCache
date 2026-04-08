@@ -3,7 +3,9 @@ package geecache
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/Jingqi0327/GeeCache/geecache/singleflight"
 )
@@ -19,11 +21,13 @@ func (f GetterFunc) Get(key string) ([]byte, error) {
 }
 
 type Group struct {
-	name      string // Group的名字
-	getter    Getter // 缓存数据未命中时回调函数
-	mainCache cache  // 支持并发的Cache
-	peers     PeerPicker
-	loader    *singleflight.Group
+	name       string // Group的名字
+	getter     Getter // 缓存数据未命中时回调函数
+	mainCache  cache  // 支持并发的Cache
+	peers      PeerPicker
+	loader     *singleflight.Group
+	defaultTTL time.Duration // 默认缓存时间
+	gcInterval time.Duration // 过期缓存清理时间
 }
 
 // 存放所有Group的全局变量
@@ -32,7 +36,7 @@ var (
 	groups = make(map[string]*Group)
 )
 
-func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
+func NewGroup(name string, cacheBytes int64, getter Getter, defaultTTL time.Duration, gcInterval time.Duration) *Group {
 	if getter == nil {
 		panic("nil Getter")
 	}
@@ -40,11 +44,14 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 	mu.Lock()
 	defer mu.Unlock()
 	g := &Group{
-		name:      name,
-		getter:    getter,
-		mainCache: cache{cacheBytes: cacheBytes},
-		loader:    &singleflight.Group{},
+		name:       name,
+		getter:     getter,
+		mainCache:  cache{cacheBytes: cacheBytes},
+		loader:     &singleflight.Group{},
+		defaultTTL: defaultTTL,
+		gcInterval: gcInterval,
 	}
+	g.mainCache.startGC(gcInterval)
 	groups[name] = g
 	return g
 }
@@ -115,5 +122,15 @@ func (g *Group) getLocally(key string) (ByteView, error) {
 }
 
 func (g *Group) populateCache(key string, value ByteView) {
-	g.mainCache.add(key, value)
+	g.mainCache.add(key, value, withJitter(g.defaultTTL))
+}
+
+// 添加随机抖动，防止缓存同时过期
+func withJitter(duration time.Duration) time.Duration {
+	jitterRange := int64(duration) / 10
+	if jitterRange == 0 {
+		return duration
+	}
+	jitter := rand.Int63n(jitterRange)
+	return duration + time.Duration(jitter)
 }
