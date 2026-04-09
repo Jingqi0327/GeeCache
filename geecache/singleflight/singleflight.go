@@ -32,5 +32,9 @@ func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, err
 	
 	c.val, c.err = fn()
 	c.wg.Done()
+
+	g.mu.Lock()
+	delete(g.m, key)
+	g.mu.Unlock()
 	return c.val, c.err
 }
