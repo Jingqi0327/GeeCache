@@ -87,6 +87,10 @@ func (p *HTTPPool) PickPeer(key string) (PeerGetter, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.peers == nil {
+		return nil, false
+	}
+	
 	peer := p.peers.Get(key)
 	if peer != "" && peer != p.self {
 		return p.httpGetters[peer], true

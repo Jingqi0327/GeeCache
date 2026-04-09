@@ -2,6 +2,7 @@ package lru
 
 import (
 	"container/list"
+	"log"
 	"time"
 )
 
@@ -51,6 +52,7 @@ func (c *Cache) Get(key string) (value Value, ok bool) {
 
 		// 判断是否过期
 		if kv.isExpired() {
+			log.Printf("[GeeCache] Remove expired key: %s\n", kv.key)
 			c.RemoveElement(ele)
 			return nil, false
 		}
@@ -121,6 +123,7 @@ func (c *Cache) RemoveExpired() {
 		prev = e.Prev()
 		kv := e.Value.(*entry)
 		if kv.isExpired() {
+			log.Printf("[GeeCache] Remove expired key: %s\n", kv.key)
 			c.RemoveElement(e)
 		}
 	}

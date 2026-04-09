@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jingqi0327/GeeCache/geecache"
+	"github.com/Jingqi0327/GeeCache/geecache/registry"
 )
 
 var db = map[string]string{
@@ -30,13 +31,33 @@ func createGroup() *geecache.Group {
 		}), defaultTTL, gcInterval)
 }
 
-func startCacheServer(addr string, addrs []string, gee *geecache.Group) {
+func startCacheServer(addr string, gee *geecache.Group) {
 	peers := geecache.NewHTTPPool(addr)
-	peers.Set(addrs...)
 	gee.RegisterPeers(peers)
 
+	registry, err := registry.NewEtcdRegisrty([]string{"127.0.0.1:2379"}, "/geecache/")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer registry.Close()
+
+	go registry.Discovery(func(addrs ...string) {
+		peers.Set(addrs...)
+	})
+
+	stopCh := make(chan error)
+	go func() {
+		err := registry.Register(addr, stopCh)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
 	log.Println("geecache is running at", addr)
-	log.Fatal(http.ListenAndServe(addr[7:], peers))
+	err = http.ListenAndServe(addr[7:], peers)
+	if err != nil {
+		stopCh <- err
+	}
 }
 
 func startAPIServer(apiAddr string, gee *geecache.Group) {
@@ -65,20 +86,12 @@ func main() {
 	flag.Parse()
 
 	apiAddr := "http://localhost:9999"
-	addrMap := map[int]string{
-		8001: "http://localhost:8001",
-		8002: "http://localhost:8002",
-		8003: "http://localhost:8003",
-	}
 
-	var addrs []string
-	for _, addr := range addrMap {
-		addrs = append(addrs, addr)
-	}
+	addr := fmt.Sprintf("http://localhost:%d", port)
 
 	gee := createGroup()
 	if api {
 		go startAPIServer(apiAddr, gee)
 	}
-	startCacheServer(addrMap[port], addrs, gee)
+	startCacheServer(addr, gee)
 }

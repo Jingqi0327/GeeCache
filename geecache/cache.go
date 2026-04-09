@@ -1,6 +1,7 @@
 package geecache
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -42,9 +43,11 @@ func (c *cache) startGC(gcInterval time.Duration) {
 		for {
 			<-ticker.C
 			c.mu.Lock()
+			log.Printf("[GeeCache] GC start...\n")
 			if c.lru != nil {
 				c.lru.RemoveExpired()
 			}
+			log.Printf("[GeeCache] GC done...\n")
 			c.mu.Unlock()
 		}
 	}()
