@@ -22,7 +22,7 @@ var db = map[string]string{
 var defaultTTL = 100 * time.Second
 var gcInterval = 300 * time.Second
 
-var registryClient registry.Registry
+var registryClient registry.RegistryClient
 
 func createGroup() *geecache.Group {
 	return geecache.NewGroup("scores", 2<<10, geecache.GetterFunc(
@@ -35,7 +35,7 @@ func createGroup() *geecache.Group {
 		}), defaultTTL, gcInterval)
 }
 
-func startCacheServer(registry registry.Registry, addr string, gee *geecache.Group) {
+func startCacheServer(registry registry.RegistryClient, addr string, gee *geecache.Group) {
 	peers := geecache.NewHTTPPool(addr)
 	gee.RegisterPeers(peers)
 
@@ -82,12 +82,12 @@ func setRegistry(name string) {
 	switch name {
 	case "etcd":
 		var err error
-		registryClient, err = registry.NewEtcdRegistry([]string{"127.0.0.1:2379"}, "/geecache/")
+		registryClient, err = registry.NewEtcdRegistryClient([]string{"127.0.0.1:2379"}, "/geecache/")
 		if err != nil {
 			log.Fatal(err)
 		}
 	case "gee":
-		registryClient = registry.NewGeeRegistry("http://localhost:8000/_gee_/registry", 3*time.Second)
+		registryClient = registry.NewGeeRegistryClient("http://localhost:8000/_gee_/registry", 0, 3*time.Second)
 	}
 }
 
@@ -101,12 +101,12 @@ func startRegistry(wg *sync.WaitGroup) {
 func main() {
 	var port int
 	var api bool
-	var geeRegistry bool
+	var geeRegistryClient bool
 	var geeRegistryServer bool
 	// 这边注册了两个命令行参数
 	flag.IntVar(&port, "port", 8001, "Geecache server port")
 	flag.BoolVar(&api, "api", false, "Start a api server?")
-	flag.BoolVar(&geeRegistry, "geeRegistry", true, "Start a Geeregistry ?")
+	flag.BoolVar(&geeRegistryClient, "geeRegistryClient", true, "Start a GeeregistryClient ?")
 	flag.BoolVar(&geeRegistryServer, "geeRegistryServer", false, "Start a GeeregistryServer ?")
 	flag.Parse()
 
@@ -119,7 +119,7 @@ func main() {
 	}
 	wg.Wait()
 
-	if geeRegistry {
+	if geeRegistryClient {
 		setRegistry("gee")
 	} else {
 		setRegistry("etcd")

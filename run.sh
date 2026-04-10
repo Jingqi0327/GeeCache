@@ -7,7 +7,7 @@ go build -o server
 ./server -port=8003 -api=1 &
 
 sleep 2
-echo ">>> start test"
+echo ">>> query Tom 3 times"
 curl "http://localhost:9999/api?key=Tom" &
 curl "http://localhost:9999/api?key=Tom" &
 curl "http://localhost:9999/api?key=Tom" &
