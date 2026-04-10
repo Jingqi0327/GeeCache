@@ -2,6 +2,7 @@ package geecache
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"sync"
@@ -9,6 +10,11 @@ import (
 
 	"github.com/Jingqi0327/GeeCache/geecache/singleflight"
 )
+
+func init() {
+	// 禁用日志输出以避免影响性能测试结果
+	log.SetOutput(io.Discard)
+}
 
 type Getter interface {
 	Get(key string) ([]byte, error)
@@ -24,6 +30,7 @@ type Group struct {
 	name       string // Group的名字
 	getter     Getter // 缓存数据未命中时回调函数
 	mainCache  cache  // 支持并发的Cache
+	hotCache   cache  // 热点缓存
 	peers      PeerPicker
 	loader     *singleflight.Group
 	defaultTTL time.Duration // 默认缓存时间
@@ -43,15 +50,19 @@ func NewGroup(name string, cacheBytes int64, getter Getter, defaultTTL time.Dura
 
 	mu.Lock()
 	defer mu.Unlock()
+	mainCacheBytes := cacheBytes * 9 / 10
+	hotCacheBytes := cacheBytes - mainCacheBytes
 	g := &Group{
 		name:       name,
 		getter:     getter,
-		mainCache:  cache{cacheBytes: cacheBytes},
+		mainCache:  cache{cacheBytes: mainCacheBytes},
+		hotCache:   cache{cacheBytes: hotCacheBytes},
 		loader:     &singleflight.Group{},
 		defaultTTL: defaultTTL,
 		gcInterval: gcInterval,
 	}
 	g.mainCache.startGC(gcInterval)
+	g.hotCache.startGC(gcInterval)
 	groups[name] = g
 	return g
 }
@@ -69,8 +80,15 @@ func (g *Group) Get(key string) (ByteView, error) {
 		return ByteView{}, fmt.Errorf("key is required")
 	}
 
+	// 从主缓存中获取
 	if v, ok := g.mainCache.get(key); ok {
-		log.Printf("[GeeCache] hit : %s\n", key)
+		log.Printf("[GeeCache] hit main cache: %s\n", key)
+		return v, nil
+	}
+
+	// 从热点缓存中获取
+	if v, ok := g.hotCache.get(key); ok {
+		log.Printf("[GeeCache] hit hot cache: %s\n", key)
 		return v, nil
 	}
 
@@ -113,7 +131,13 @@ func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
 	if err != nil {
 		return ByteView{}, err
 	}
-	return ByteView{bytes}, nil
+
+	// 将获取到的值添加到热点缓存中
+	value := ByteView{b: cloneBytes(bytes)}
+	if rand.Intn(10) == 0 { // 1/10的概率添加到热点缓存中,减少冷门key的缓存
+		g.hotCache.add(key, value, withJitter(g.defaultTTL))
+	}
+	return value, nil
 }
 
 // getLocally 从本地获取值
