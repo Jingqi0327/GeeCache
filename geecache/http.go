@@ -32,10 +32,12 @@ func NewHTTPPool(self string) *HTTPPool {
 	}
 }
 
+// Log 打印日志
 func (p *HTTPPool) Log(format string, v ...interface{}) {
 	log.Printf("[Server %s] %s", p.self, fmt.Sprintf(format, v...))
 }
 
+// ServeHTTP 处理HTTP请求
 func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, p.basePath) {
 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
@@ -83,6 +85,7 @@ func (p *HTTPPool) Set(peers ...string) {
 	}
 }
 
+// PickPeer 选择节点
 func (p *HTTPPool) PickPeer(key string) (PeerGetter, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -102,6 +105,7 @@ type httpGetter struct {
 	baseURL string
 }
 
+// Get 从其他节点获取值
 func (h *httpGetter) Get(group string, key string) ([]byte, error) {
 	url := fmt.Sprintf(
 		"%v%v/%v",

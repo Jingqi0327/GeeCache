@@ -63,6 +63,7 @@ func GetGroup(name string) *Group {
 	return g
 }
 
+// Get 获取缓存值
 func (g *Group) Get(key string) (ByteView, error) {
 	if key == "" {
 		return ByteView{}, fmt.Errorf("key is required")
@@ -76,6 +77,7 @@ func (g *Group) Get(key string) (ByteView, error) {
 	return g.load(key)
 }
 
+// RegisterPeers 注册 PeerPicker，用于获取其他节点的信息
 func (g *Group) RegisterPeers(peers PeerPicker) {
 	if g.peers != nil {
 		panic("RegisterPeerPicker called more than once")
@@ -83,6 +85,7 @@ func (g *Group) RegisterPeers(peers PeerPicker) {
 	g.peers = peers
 }
 
+// load 调用回调函数获取值
 func (g *Group) load(key string) (value ByteView, err error) {
 	fn := func() (interface{}, error) {
 		if g.peers != nil {
@@ -104,6 +107,7 @@ func (g *Group) load(key string) (value ByteView, err error) {
 	return
 }
 
+// getFromPeer 从其他节点获取值
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
 	bytes, err := peer.Get(g.name, key)
 	if err != nil {
@@ -112,6 +116,7 @@ func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
 	return ByteView{bytes}, nil
 }
 
+// getLocally 从本地获取值
 func (g *Group) getLocally(key string) (ByteView, error) {
 	bytes, err := g.getter.Get(key)
 	if err != nil {
@@ -122,6 +127,7 @@ func (g *Group) getLocally(key string) (ByteView, error) {
 	return value, nil
 }
 
+// populateCache 将值添加到缓存中
 func (g *Group) populateCache(key string, value ByteView) {
 	g.mainCache.add(key, value, withJitter(g.defaultTTL))
 }

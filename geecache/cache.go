@@ -37,6 +37,7 @@ func (c *cache) get(key string) (value ByteView, ok bool) {
 	return
 }
 
+// startGC 启动一个GC协程，每隔gcInterval时间清理一次过期的缓存
 func (c *cache) startGC(gcInterval time.Duration) {
 	ticker := time.NewTicker(gcInterval)
 	go func() {
